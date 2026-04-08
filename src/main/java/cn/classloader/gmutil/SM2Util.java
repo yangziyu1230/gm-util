@@ -626,7 +626,7 @@ public class SM2Util extends GMBaseUtil {
         } catch (IOException | InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
             return false;
         } finally {
-            // signer.reset();
+            signer.reset();
         }
     }
 
