@@ -18,6 +18,8 @@ import org.bouncycastle.util.BigIntegers;
 import org.bouncycastle.util.encoders.Hex;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.math.BigInteger;
 import java.security.*;
 import java.security.spec.ECFieldFp;
@@ -607,7 +609,25 @@ public class SM2Util extends GMBaseUtil {
         }
         signer.init(false, param);
         signer.update(srcData, 0, srcData.length);
-        return signer.verifySignature(sign);
+        // return signer.verifySignature(sign);
+        // ASN1的INTEGER第一位为0时，部分加密机也会加0x00，导致验证失败，使用反射调用verifySignature方法，绕过这个限制
+        try {
+            ASN1Sequence seq = (ASN1Sequence) ASN1Primitive.fromByteArray(sign);
+            if (seq.size() != 2)
+            {
+                return false;
+            }
+            BigInteger r = ((ASN1Integer) seq.getObjectAt(0)).getValue();
+            BigInteger s = ((ASN1Integer) seq.getObjectAt(1)).getValue();
+            Class<SM2Signer> signerClass = SM2Signer.class;
+            Method verifySignatureMethod = signerClass.getDeclaredMethod("verifySignature", BigInteger.class, BigInteger.class);
+            verifySignatureMethod.setAccessible(true);
+            return (Boolean) verifySignatureMethod.invoke(signer, r, s);
+        } catch (IOException | InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
+            return false;
+        } finally {
+            // signer.reset();
+        }
     }
 
     private static byte[] extractBytes(byte[] src, int offset, int length) {
